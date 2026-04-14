@@ -15,6 +15,7 @@ import {
   type PullRequestState,
 } from "./pr-state.js";
 import type { ProjectConfig } from "./projects.js";
+import { redactSecrets } from "./redact.js";
 import { getJobState, saveJobState } from "./run-state.js";
 import { CODER_DISPLAY_NAMES, runCoder } from "./runners.js";
 
@@ -242,6 +243,7 @@ export async function runAgent(
     console.log(`[${project.id}/${issue.id}] Done - PR: ${prUrl}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const redactedMessage = redactSecrets(message);
     const now = new Date().toISOString();
 
     await saveJobState({
@@ -255,15 +257,15 @@ export async function runAgent(
       updatedAt: now,
       finishedAt: now,
       prUrl: opts.existingPr?.prUrl,
-      error: message,
+      error: redactedMessage,
     }).catch(() => {});
     terminalState = {
       status: "failed",
       prUrl: opts.existingPr?.prUrl,
-      error: message,
+      error: redactedMessage,
     };
 
-    await postLinearComment(issue.id, `Agent failed.\n\n${message}`).catch(() => {});
+    await postLinearComment(issue.id, `Agent failed.\n\n${redactedMessage}`).catch(() => {});
     await setIssueState(
       issue.id,
       issue.teamId,
