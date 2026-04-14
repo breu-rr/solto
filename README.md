@@ -23,7 +23,8 @@ Commit and branch naming are driven by Linear labels:
 
 Add the `yolo` label alongside `agent` to push directly to `main` instead of opening a PR.
 
-## ⚠ Trust model — read before deploying
+<details>
+<summary><strong>⚠ Trust model — read before deploying</strong></summary>
 
 solto runs a coding agent with **--dangerously-skip-permissions** (Claude Code) / **--dangerously-bypass-approvals-and-sandbox** (Codex) on the contents of Linear issues. Treat the `agent` label as **shell access to the host**:
 
@@ -39,6 +40,8 @@ Therefore:
 - Consider sandboxing the coder (container, firejail, nsjail) if you don't fully control who can label Linear issues.
 
 This is inherent to "run an LLM agent unattended on real code", not a solto-specific flaw. But the radius is real and public users of this repo should know before they deploy.
+
+</details>
 
 ## Practical requirements
 
