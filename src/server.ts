@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
-import { readFile } from "node:fs/promises";
 import crypto from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -37,6 +36,7 @@ const MAX_WEBHOOK_BODY_BYTES = 1_000_000;
 const STATUS_LOG_TAIL_LINES = 20;
 const STATUS_LOG_TAIL_MIN = 1;
 const STATUS_LOG_TAIL_MAX = 50;
+const STATUS_LOG_SCAN_MULTIPLIERS = [4, 8, 16, 32];
 const ISSUE_ID_RE = /^[a-zA-Z0-9-]{1,64}$/;
 const ISSUE_IDENTIFIER_RE = /^[A-Z0-9]+-[0-9]+$/;
 const PM2_HOME = process.env.PM2_HOME || path.join(process.env.HOME || "", ".pm2");
@@ -109,7 +109,7 @@ function dedupeSequential(lines: string[]): string[] {
   return deduped;
 }
 
-function compactStartupNoise(lines: string[]): string[] {
+function isStartupNoise(line: string): boolean {
   const noisePatterns = [
     /^> solto@/,
     /^> tsx --env-file=/,
@@ -120,12 +120,15 @@ function compactStartupNoise(lines: string[]): string[] {
     /^ ?ELIFECYCLE ? Command failed\.$/,
     /^$/,
   ];
+  return noisePatterns.some((pattern) => pattern.test(line));
+}
+
+function compactStartupNoise(lines: string[]): string[] {
   const compacted: string[] = [];
   let skippedNoise = 0;
 
   for (const line of lines) {
-    const isNoise = noisePatterns.some((pattern) => pattern.test(line));
-    if (!isNoise) {
+    if (!isStartupNoise(line)) {
       if (skippedNoise > 0) {
         compacted.push(`[startup noise omitted: ${skippedNoise} lines]`);
         skippedNoise = 0;
@@ -151,27 +154,59 @@ function selectLatestErrorEntries(lines: string[], maxLines: number): string[] {
   return source.slice(-maxLines);
 }
 
-async function readLogTail(filePath: string, maxLines: number): Promise<string[]> {
+async function readLogWindow(filePath: string, maxLines: number): Promise<string[]> {
   try {
-    const raw = await readFile(filePath, "utf8");
-    return raw
-      .trimEnd()
-      .split("\n")
-      .slice(-(maxLines * 4));
+    const { stdout } = await execFileAsync("tail", ["-n", String(maxLines), filePath]);
+    return stdout.trimEnd().split("\n");
   } catch {
     return [];
   }
 }
 
+async function collectProcessedTail(
+  filePath: string,
+  maxLines: number,
+  processLines: (lines: string[], limit: number) => string[],
+  hasEnough: (lines: string[]) => boolean
+): Promise<string[]> {
+  let last: string[] = [];
+
+  for (const multiplier of STATUS_LOG_SCAN_MULTIPLIERS) {
+    const window = maxLines * multiplier;
+    const raw = await readLogWindow(filePath, window);
+    if (raw.length === 0) continue;
+
+    last = processLines(dedupeSequential(raw), maxLines).slice(-maxLines);
+    if (hasEnough(last)) return last;
+  }
+
+  return last;
+}
+
 async function getStatusLogs(maxLines: number): Promise<Record<string, string[]>> {
-  const outTail = await readLogTail(path.join(PM2_HOME, "logs", "solto-out.log"), maxLines);
-  const errorTail = await readLogTail(path.join(PM2_HOME, "logs", "solto-error.log"), maxLines);
-  const tunnelTail = await readLogTail(path.join(PM2_HOME, "logs", "cloudflare-tunnel-error.log"), maxLines);
+  const hasRealOutput = (lines: string[]) =>
+    lines.some((line) => line.trim().length > 0 && !line.startsWith("[startup noise omitted:"));
+  const hasAnyLines = (lines: string[]) => lines.length > 0;
 
   return {
-    soltoOutTail: compactStartupNoise(dedupeSequential(outTail)).slice(-maxLines),
-    soltoErrorTail: selectLatestErrorEntries(dedupeSequential(errorTail), maxLines),
-    tunnelErrorTail: selectLatestErrorEntries(dedupeSequential(tunnelTail), maxLines),
+    soltoOutTail: await collectProcessedTail(
+      path.join(PM2_HOME, "logs", "solto-out.log"),
+      maxLines,
+      (lines, limit) => compactStartupNoise(lines).slice(-limit),
+      hasRealOutput
+    ),
+    soltoErrorTail: await collectProcessedTail(
+      path.join(PM2_HOME, "logs", "solto-error.log"),
+      maxLines,
+      selectLatestErrorEntries,
+      hasAnyLines
+    ),
+    tunnelErrorTail: await collectProcessedTail(
+      path.join(PM2_HOME, "logs", "cloudflare-tunnel-error.log"),
+      maxLines,
+      selectLatestErrorEntries,
+      hasAnyLines
+    ),
   };
 }
 function normalizeStateName(name: string): string {
