@@ -40,6 +40,9 @@ export async function runAgent(
   const initialRunState = await getJobState(issue.id).catch(() => null);
   const startedAt = initialRunState?.startedAt ?? new Date().toISOString();
   const mode = opts.direct ? "direct" : isIteration ? "iteration" : "pr";
+  let terminalState:
+    | { status: "succeeded" | "direct" | "no_changes" | "failed"; prUrl?: string; error?: string }
+    | null = null;
 
   console.log(`[${project.id}/${issue.id}] Starting: ${issue.title}`);
 
@@ -97,6 +100,7 @@ export async function runAgent(
         finishedAt: now,
         prUrl: opts.existingPr?.prUrl,
       });
+      terminalState = { status: "no_changes", prUrl: opts.existingPr?.prUrl };
       await postLinearComment(
         issue.id,
         "Agent finished but made no changes. The task may already be complete or the description needs more detail."
@@ -138,6 +142,7 @@ export async function runAgent(
         updatedAt: now,
         finishedAt: now,
       });
+      terminalState = { status: "direct" };
       await postLinearComment(
         issue.id,
         `Done. Pushed directly to ${base} (yolo).\n\n${diff.trim()}`
@@ -176,6 +181,7 @@ export async function runAgent(
         finishedAt: now,
         prUrl,
       });
+      terminalState = { status: "succeeded", prUrl };
       await postLinearComment(
         issue.id,
         `Done. Updated PR: ${prUrl}\n\n${diff.trim()}`
@@ -226,6 +232,7 @@ export async function runAgent(
       finishedAt: now,
       prUrl,
     });
+    terminalState = { status: "succeeded", prUrl };
     await postLinearComment(
       issue.id,
       `Done. PR opened: ${prUrl}\n\n${diff.trim()}`
@@ -250,6 +257,11 @@ export async function runAgent(
       prUrl: opts.existingPr?.prUrl,
       error: message,
     }).catch(() => {});
+    terminalState = {
+      status: "failed",
+      prUrl: opts.existingPr?.prUrl,
+      error: message,
+    };
 
     await postLinearComment(issue.id, `Agent failed.\n\n${message}`).catch(() => {});
     await setIssueState(
@@ -263,6 +275,22 @@ export async function runAgent(
 
     console.error(`[${project.id}/${issue.id}] Failed:`, err);
   } finally {
+    if (terminalState) {
+      const now = new Date().toISOString();
+      await saveJobState({
+        issueId: issue.id,
+        projectId: project.id,
+        title: issue.title,
+        mode,
+        status: terminalState.status,
+        phase: "finished",
+        startedAt,
+        updatedAt: now,
+        finishedAt: now,
+        prUrl: terminalState.prUrl,
+        error: terminalState.error,
+      }).catch(() => {});
+    }
     await execSilent("git", [
       "-C", project.repoPath,
       "worktree", "remove", worktree, "--force",
@@ -298,6 +326,18 @@ async function prepareWorktree(
   }
 
   await exec("git", ["-C", project.repoPath, "fetch", "origin", base]);
+  await execSilent("git", [
+    "-C", project.repoPath,
+    "worktree", "remove", worktree, "--force",
+  ]);
+  await execSilent("git", [
+    "-C", project.repoPath,
+    "worktree", "prune",
+  ]);
+  await execSilent("git", [
+    "-C", project.repoPath,
+    "branch", "-D", branch,
+  ]);
   await exec("git", [
     "-C", project.repoPath,
     "worktree", "add", worktree,
@@ -380,6 +420,10 @@ ${followUpBlock}${existingPrBlock}Instructions:
 - Read AGENTS.md at the repo root FIRST and follow every rule in it
   (style, commit format, attribution, dependency policy, workflow). It
   takes precedence over your defaults.
+- If your runtime supports delegation or subagents, proactively use them
+  for independent research, bounded implementation slices, or review.
+  Keep the final result integrated in this same worktree and branch.
+  Do not create extra branches or PRs.
 - Follow existing code conventions in the repo
 - Run the test suite if one exists and fix any failures you introduce
 - Only modify files directly relevant to this task

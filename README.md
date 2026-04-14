@@ -10,6 +10,8 @@ Self-hosted orchestrator that turns assigned [Linear](https://linear.app/) issue
 4. If solto already opened a PR for that issue, a later Linear comment that starts with `@solto-bot` updates the same PR branch.
 5. The Linear issue self-narrates through comments and workflow states.
 
+When `CODER=claude`, solto also enables a small set of generic Claude subagents by default for research, bounded implementation, and review. The main agent still owns the final branch and PR.
+
 An issue can trigger solto in either of these ways:
 
 - create the issue in `Todo` / `To do` already assigned to the bot user
