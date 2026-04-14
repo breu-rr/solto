@@ -146,6 +146,8 @@ solto only forwards `OPENAI_API_KEY` if it's set, so leaving it empty defers to 
 
 **Claude Code**: set `CODER=claude` in `.env` and `ANTHROPIC_API_KEY=<your key>`. Optionally run `claude` once interactively to authenticate.
 
+When `CODER=claude`, solto also passes a small generic `--agents` set to Claude Code so it can delegate research, bounded implementation, and review work inside the same run. Set `CLAUDE_ENABLE_SUBAGENTS=0` in `.env` if you want to disable that.
+
 Per-runner config (model, flags, permission mode) lives in `src/runners.ts`.
 
 ### 4. Set up public HTTPS ([Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/))
@@ -218,6 +220,7 @@ curl https://<your-webhook-host>/health                 # → ok (via tunnel)
 |---|---|
 | `CODER` | `codex` (default) or `claude` |
 | `ANTHROPIC_API_KEY` | Headless Claude Code CLI (when `CODER=claude`) |
+| `CLAUDE_ENABLE_SUBAGENTS` | Optional. `1` by default when `CODER=claude`; set `0` / `false` / `no` to disable Claude subagents |
 | `OPENAI_API_KEY` | Codex CLI (when `CODER=codex`). Leave empty to use `codex login` session |
 | `LINEAR_API_KEY` | Linear personal API key for comments + state updates |
 | `LINEAR_BOT_MENTION` | Optional override for the bot mention alias used in follow-up comments |

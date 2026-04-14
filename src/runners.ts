@@ -3,6 +3,36 @@ import { exec } from "./exec.js";
 export type Coder = "claude" | "codex";
 
 const AGENT_TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MS ?? 20 * 60 * 1000);
+const CLAUDE_SUBAGENTS_ENABLED = !["0", "false", "no"].includes(
+  (process.env.CLAUDE_ENABLE_SUBAGENTS ?? "1").toLowerCase()
+);
+
+const CLAUDE_SUBAGENTS = {
+  researcher: {
+    description:
+      "Research specialist. Use proactively for background reading, repo exploration, and parallel fact-finding on independent questions.",
+    prompt:
+      "You are a focused research subagent. Explore only what is needed, summarize findings clearly, and hand back concise evidence the main agent can use immediately.",
+    tools: ["Read", "Grep", "Glob", "Bash"],
+    model: "inherit",
+  },
+  implementer: {
+    description:
+      "Implementation specialist. Use proactively for isolated, clearly bounded code changes in specific files or modules.",
+    prompt:
+      "You are a focused implementation subagent. Make the smallest coherent change for the assigned slice, verify it when practical, and report exactly what changed.",
+    tools: ["Read", "Write", "Edit", "Grep", "Glob", "Bash"],
+    model: "inherit",
+  },
+  reviewer: {
+    description:
+      "Code review specialist. Use proactively after code changes to spot regressions, missing tests, and risky assumptions.",
+    prompt:
+      "You are a focused reviewer subagent. Review the diff for correctness, regressions, and testing gaps, then return concise, prioritized findings.",
+    tools: ["Read", "Grep", "Glob", "Bash"],
+    model: "inherit",
+  },
+} as const;
 
 export function getCoder(): Coder {
   const v = (process.env.CODER ?? "codex").toLowerCase();
@@ -41,14 +71,18 @@ async function runClaude(prompt: string, cwd: string): Promise<void> {
   if (process.env.ANTHROPIC_API_KEY) {
     env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
   }
+  const args = [
+    "--dangerously-skip-permissions",
+    "--model", "claude-sonnet-4-5",
+    "--max-turns", "30",
+  ];
+  if (CLAUDE_SUBAGENTS_ENABLED) {
+    args.push("--agents", JSON.stringify(CLAUDE_SUBAGENTS));
+  }
+  args.push("-p", prompt);
   await exec(
     "claude",
-    [
-      "--dangerously-skip-permissions",
-      "--model", "claude-sonnet-4-5",
-      "--max-turns", "30",
-      "-p", prompt,
-    ],
+    args,
     { cwd, env, timeoutMs: AGENT_TIMEOUT_MS }
   );
 }
