@@ -5,7 +5,7 @@ const envPath = path.resolve(__dirname, ".env");
 if (fs.existsSync(envPath)) {
   for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
     const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (match && !process.env[match[1]]) process.env[match[1]] = match[2];
+    if (match) process.env[match[1]] = match[2];
   }
 }
 
