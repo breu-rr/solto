@@ -17,10 +17,10 @@ Self-hosted orchestrator that turns assigned [Linear](https://linear.app/) issue
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mohbreu/solto/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mohbreu/solto/main/install.sh | bash
 ```
 
-This runs as root because it installs host packages and creates the locked-down `agent` user. After that, solto itself runs as `agent`, not root. For the full setup and operations guide, use [ZERO_TO_SOLTO.md](./ZERO_TO_SOLTO.md).
+Run it as root, or prefix it with `sudo` if needed. The installer needs root because it installs host packages and creates the locked-down `agent` user. After that, solto itself runs as `agent`, not root.
 
 ## Upgrade
 
@@ -29,7 +29,7 @@ cd ~/solto
 ./scripts/upgrade.sh
 ```
 
-That upgrades to the latest available release, refreshes dependencies, and reloads `pm2`. For `latest`, `main`, or pinned-tag examples, see [ZERO_TO_SOLTO.md](./ZERO_TO_SOLTO.md).
+That upgrades to the latest available release, refreshes dependencies, and reloads `pm2`. For the full setup and operations guide, including `latest`, `main`, and pinned-tag examples, see [ZERO_TO_SOLTO.md](./ZERO_TO_SOLTO.md).
 
 After install or any auth/config change, run:
 
