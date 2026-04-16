@@ -31,3 +31,34 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+  install-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run bootstrap
+        run: sudo bash scripts/bootstrap.sh
+
+      - name: Verify bootstrap result
+        shell: bash
+        run: |
+          set -euo pipefail
+          id agent
+          sudo test -d /home/agent
+          sudo -u agent bash -lc '
+            set -euo pipefail
+            export PATH="$HOME/.local/bin:$PATH"
+            eval "$(~/.local/bin/mise activate bash)"
+            command -v node
+            command -v npm
+            command -v pnpm
+            command -v pm2
+            command -v codex
+            command -v claude
+            command -v cloudflared
+            command -v bwrap
+          '
