@@ -47,23 +47,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          id agent
-          sudo test -d /home/agent
-          sudo -i -u agent env \
-            HOME=/home/agent \
-            XDG_CONFIG_HOME=/home/agent/.config \
-            XDG_CACHE_HOME=/home/agent/.cache \
-            XDG_DATA_HOME=/home/agent/.local/share \
-            XDG_STATE_HOME=/home/agent/.local/state \
-            bash -lc '
-            set -euo pipefail
-            source ~/.bashrc
-            command -v node
-            command -v npm
-            command -v pnpm
-            command -v pm2
-            command -v codex
-            command -v claude
-            command -v cloudflared
-            command -v bwrap
-          '
+          sudo bash scripts/verify-bootstrap.sh
