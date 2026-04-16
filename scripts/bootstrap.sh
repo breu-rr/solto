@@ -47,6 +47,13 @@ echo "--- Running agent user setup"
 sudo -i -u agent bash << 'AGENT_SETUP'
 set -euo pipefail
 
+export HOME="$(getent passwd "$(id -un)" | cut -d: -f6)"
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_CACHE_HOME="$HOME/.cache"
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_STATE_HOME="$HOME/.local/state"
+mkdir -p "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME"
+
 echo "--- Installing Claude Code CLI"
 curl -fsSL https://claude.ai/install.sh | bash
 grep -qxF 'export PATH="$HOME/.local/bin:$PATH"' ~/.bashrc \
