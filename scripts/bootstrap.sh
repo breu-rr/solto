@@ -60,12 +60,10 @@ grep -qxF 'eval "$(~/.local/bin/mise activate bash)"' ~/.bashrc \
 export PATH="$HOME/.local/bin:$PATH"
 eval "$(mise activate bash)"
 
-echo "--- Installing Node LTS + pnpm + pm2"
+echo "--- Installing Node LTS + global CLIs"
 mise use --global node@lts
-mise use --global npm:pnpm npm:pm2
-
-echo "--- Installing Codex CLI"
-npm i -g @openai/codex
+mise exec node@lts -- npm i -g pnpm pm2 @openai/codex
+mise reshim
 
 echo "--- Installing cloudflared"
 mkdir -p ~/.local/bin

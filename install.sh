@@ -61,10 +61,17 @@ resolve_ref() {
     fi
 }
 
-echo "--- Running bootstrap"
-bash -c "$(curl -fsSL "$BOOTSTRAP_URL")"
+bootstrap_url_for_ref() {
+    local repo="$1"
+    local ref="$2"
+    printf 'https://raw.githubusercontent.com/%s/%s/scripts/bootstrap.sh\n' "$repo" "$ref"
+}
 
 SOLTO_REF="$(resolve_ref "$SOLTO_REF_INPUT")"
+BOOTSTRAP_URL="$(bootstrap_url_for_ref "$SOLTO_REPO" "$SOLTO_REF")"
+
+echo "--- Running bootstrap from ${SOLTO_REF}"
+bash -c "$(curl -fsSL "$BOOTSTRAP_URL")"
 
 echo "--- Installing solto ref ${SOLTO_REF}"
 
