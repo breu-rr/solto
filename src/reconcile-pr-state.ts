@@ -1,6 +1,7 @@
 import { exec } from "./exec.js";
 import {
   STATE_DONE,
+  STATE_IN_REVIEW,
   getIssueById,
   postLinearComment,
   setIssueState,
@@ -51,6 +52,28 @@ async function reconcileEntry(
 
   const details = await getPullRequestDetails(project.githubRepo, prNumber);
   if (details.state !== "closed") {
+    const issue = await getIssueById(entry.issueId);
+    if (!issue) {
+      return { status: "skipped", reason: `missing Linear issue ${entry.issueId}` };
+    }
+
+    if (issue.stateName !== STATE_IN_REVIEW) {
+      if (!dryRun) {
+        await syncPullRequestAttachment(issue.id, entry.prUrl, "open").catch((err) => {
+          console.error(`[reconcile] failed to sync PR attachment for ${issue.id}:`, err);
+        });
+        await postLinearComment(
+          issue.id,
+          `PR still open: ${entry.prUrl}\n\nMoving the Linear issue back to In Review.`
+        );
+        await setIssueState(issue.id, issue.teamId, STATE_IN_REVIEW);
+      }
+      return {
+        status: "reconciled",
+        reason: `PR is still ${details.state} and issue moved back to In Review`,
+      };
+    }
+
     return { status: "kept", reason: `PR is still ${details.state}` };
   }
 
