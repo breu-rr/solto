@@ -76,12 +76,27 @@ bash -c "$(curl -fsSL "$BOOTSTRAP_URL")"
 echo "--- Installing solto ref ${SOLTO_REF}"
 
 echo "--- Installing solto repo into ${SOLTO_DIR}"
+AGENT_HOME="$(getent passwd "$AGENT_USER" | cut -d: -f6)"
 sudo -i -u "$AGENT_USER" env \
+    HOME="$AGENT_HOME" \
+    XDG_CONFIG_HOME="$AGENT_HOME/.config" \
+    XDG_CACHE_HOME="$AGENT_HOME/.cache" \
+    XDG_DATA_HOME="$AGENT_HOME/.local/share" \
+    XDG_STATE_HOME="$AGENT_HOME/.local/state" \
     SOLTO_DIR="$SOLTO_DIR" \
     REPO_URL="$REPO_URL" \
     SOLTO_REF="$SOLTO_REF" \
     bash <<'AGENT_SETUP'
 set -euo pipefail
+
+export HOME="$(getent passwd "$(id -un)" | cut -d: -f6)"
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_CACHE_HOME="$HOME/.cache"
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_STATE_HOME="$HOME/.local/state"
+mkdir -p "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME"
+export PATH="$HOME/.local/bin:$PATH"
+eval "$(~/.local/bin/mise activate bash)"
 
 if [ -d "$SOLTO_DIR/.git" ]; then
     echo "→ updating existing checkout at $SOLTO_DIR"
