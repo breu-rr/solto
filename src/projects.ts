@@ -20,6 +20,7 @@ interface ProjectEntry {
   id: string;
   githubRepo: string;
   linearProjectId?: string;
+  linearProjectName?: string;
   githubBase?: string;
   maxParallel?: number;
   maxPerHour?: number;
@@ -45,7 +46,7 @@ function loadEntries(): ProjectEntry[] {
   for (const entry of parsed) {
     if (!entry.id || !entry.githubRepo || !entry.linearProjectId) {
       throw new Error(
-        `Each entry in ${CONFIG_PATH} needs "id", "githubRepo", and "linearProjectId"`
+        `Each entry in ${CONFIG_PATH} needs "id", "githubRepo", and "linearProjectId". You can scaffold with "linearProjectName", but ./scripts/add-project.sh must resolve it first.`
       );
     }
   }

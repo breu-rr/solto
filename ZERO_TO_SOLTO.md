@@ -113,7 +113,7 @@ solto uses [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/
 > [!NOTE]
 > Use a dedicated Linear user such as `solto-bot` for `LINEAR_API_KEY` so automation comments and state changes are isolated from your personal account.
 >
-> For multiple repos or teams, keep one project entry per repo/team pair. The shared host settings stay the same, and each project still gets its own GitHub repo webhook, clone and worktree directory. For Linear, solto first looks for `LINEAR_WEBHOOK_SECRET` in `repos/<project-id>/.env`, then falls back to `LINEAR_WEBHOOK_SECRET` in the root `.env`. `linearProjectId` in `projects.local.json` is the hard binding between one Linear project and one GitHub repo, which prevents a shared board from dispatching the wrong ticket into the wrong repo.
+> For multiple repos or teams, keep one project entry per repo/team pair. The shared host settings stay the same, and each project still gets its own GitHub repo webhook, clone and worktree directory. For Linear, solto first looks for `LINEAR_WEBHOOK_SECRET` in `repos/<project-id>/.env`, then falls back to `LINEAR_WEBHOOK_SECRET` in the root `.env`. You can seed a new entry with the exact `linearProjectName`, and `./scripts/add-project.sh` will resolve and persist the real `linearProjectId` back into `projects.local.json`. That `linearProjectId` is the hard binding between one Linear project and one GitHub repo, which prevents a shared board from dispatching the wrong ticket into the wrong repo.
 
 ## Target Project Requirements
 
@@ -246,9 +246,10 @@ curl https://<your-webhook-host>/health
 ## Adding a Project After Install
 
 ```bash
-# 1. Edit projects.local.json and add a new entry with id + githubRepo + linearProjectId
+# 1. Edit projects.local.json and add a new entry with id + githubRepo + linearProjectName
 # 2. Scaffold local state
 ./scripts/add-project.sh <new-id>
+#    This resolves linearProjectName and writes linearProjectId back into projects.local.json
 # 3. Create the Linear webhook and the repo's GitHub pull_request webhook
 # 4. Reload
 pm2 restart solto

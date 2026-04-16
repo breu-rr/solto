@@ -31,6 +31,11 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! command -v curl >/dev/null 2>&1; then
+    echo "This script needs 'curl'. Install it with: sudo apt-get install -y curl" >&2
+    exit 1
+fi
+
 github_repo=$(jq -r --arg id "$id" '.[] | select(.id == $id) | .githubRepo' "$CONFIG")
 if [ -z "$github_repo" ] || [ "$github_repo" = "null" ]; then
     echo "Project '$id' not found in $CONFIG" >&2
@@ -38,15 +43,66 @@ if [ -z "$github_repo" ] || [ "$github_repo" = "null" ]; then
 fi
 
 linear_project_id=$(jq -r --arg id "$id" '.[] | select(.id == $id) | .linearProjectId // empty' "$CONFIG")
-if [ -z "$linear_project_id" ]; then
-    echo "Project '$id' is missing linearProjectId in $CONFIG" >&2
-    exit 1
-fi
+linear_project_name=$(jq -r --arg id "$id" '.[] | select(.id == $id) | .linearProjectName // empty' "$CONFIG")
 
 repo_dir="$ROOT/repos/$id"
 worker_dir="$ROOT/workers/$id"
 env_file="$ROOT/.env"
 repo_env_file="$repo_dir/.env"
+
+if [ -z "$linear_project_id" ]; then
+    if [ -z "$linear_project_name" ]; then
+        echo "Project '$id' is missing both linearProjectId and linearProjectName in $CONFIG" >&2
+        exit 1
+    fi
+
+    if [ ! -f "$env_file" ]; then
+        echo "Missing $env_file; cannot resolve linearProjectName without LINEAR_API_KEY" >&2
+        exit 1
+    fi
+
+    linear_api_key="$(sed -nE 's/^[[:space:]]*LINEAR_API_KEY[[:space:]]*=[[:space:]]*(.*)[[:space:]]*$/\1/p' "$env_file" | head -n1)"
+    if [[ "$linear_api_key" =~ ^\"(.*)\"$ ]]; then
+        linear_api_key="${BASH_REMATCH[1]}"
+    elif [[ "$linear_api_key" =~ ^\'(.*)\'$ ]]; then
+        linear_api_key="${BASH_REMATCH[1]}"
+    fi
+    if [ -z "$linear_api_key" ]; then
+        echo "LINEAR_API_KEY missing in $env_file; cannot resolve linearProjectName" >&2
+        exit 1
+    fi
+
+    linear_query='query($name: String!) { projects(first: 100, includeArchived: true, filter: { name: { eq: $name } }) { nodes { id name } } }'
+    linear_response="$(
+        curl -fsSL https://api.linear.app/graphql \
+            -H "content-type: application/json" \
+            -H "authorization: $linear_api_key" \
+            --data "$(jq -cn --arg query "$linear_query" --arg name "$linear_project_name" '{query: $query, variables: {name: $name}}')"
+    )"
+
+    linear_match_count="$(jq '[.data.projects.nodes[]?] | length' <<<"$linear_response")"
+    if [ "$linear_match_count" -eq 0 ]; then
+        echo "Could not resolve linearProjectName '$linear_project_name' in Linear" >&2
+        exit 1
+    fi
+    if [ "$linear_match_count" -gt 1 ]; then
+        echo "linearProjectName '$linear_project_name' matched multiple Linear projects; use linearProjectId instead" >&2
+        exit 1
+    fi
+
+    linear_project_id="$(jq -r '.data.projects.nodes[0].id' <<<"$linear_response")"
+    tmp_config="$(mktemp)"
+    jq --arg id "$id" --arg linear_project_id "$linear_project_id" '
+        map(
+            if .id == $id
+            then . + { linearProjectId: $linear_project_id }
+            else .
+            end
+        )
+    ' "$CONFIG" > "$tmp_config"
+    mv "$tmp_config" "$CONFIG"
+    echo "→ resolved Linear project '$linear_project_name' to $linear_project_id and saved it in projects.local.json"
+fi
 
 if [ -d "$repo_dir/.git" ]; then
     echo "✓ $repo_dir already exists, skipping clone"

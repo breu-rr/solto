@@ -2,7 +2,7 @@
   {
     "id": "my-project",
     "githubRepo": "your-org/your-repo",
-    "linearProjectId": "01234567-89ab-cdef-0123-456789abcdef",
+    "linearProjectName": "your-linear-project-name",
     "githubBase": "main",
     "maxParallel": 2,
     "maxPerHour": 10,
