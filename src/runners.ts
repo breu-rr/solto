@@ -22,6 +22,17 @@ const CONFIGURED_CODEX_MODEL = process.env.CODEX_MODEL?.trim() || null;
 const CODEX_MODEL_LABEL = CONFIGURED_CODEX_MODEL || "not pinned";
 const versionCache = new Map<Coder, Promise<string>>();
 
+export function normalizeCoderVersionOutput(raw: string): string {
+  const cleaned = raw.replace(/\r\n/g, "\n").trim().split("\n")[0]?.trim() || "";
+  if (!cleaned) return "unknown";
+
+  const semver = cleaned.match(/\b\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?\b/);
+  if (semver) return semver[0];
+
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  return tokens.at(-1) || "unknown";
+}
+
 export function normalizeConfiguredCoder(
   value: string | undefined
 ): ConfiguredCoder {
@@ -223,6 +234,5 @@ async function readCoderVersion(coder: Coder): Promise<string> {
   const raw = coder === "claude"
     ? await exec("claude", ["--version"], { env: baseEnv() })
     : await exec("codex", ["--version"], { env: baseEnv() });
-  const cleaned = raw.replace(/\r\n/g, "\n").trim().split("\n")[0]?.trim();
-  return cleaned || "unknown";
+  return normalizeCoderVersionOutput(raw);
 }

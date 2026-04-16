@@ -66,7 +66,7 @@ export function formatExecutionSummary(
 ): string {
   const lines = [
     `Execution:`,
-    `- Runtime: ${formatCoderRuntimeLabel(plan)}`,
+    `- Runtime: \`${formatCoderRuntimeLabel(plan)}\``,
   ];
 
   if (plan.coder === "claude") {

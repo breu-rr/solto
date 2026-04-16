@@ -361,7 +361,7 @@ export async function runAgent(
 function buildRunStartedComment(
   plan: Awaited<ReturnType<typeof enrichRunPlan>>
 ): string {
-  const runtime = formatCoderRuntimeLabel(plan);
+  const runtime = `\`${formatCoderRuntimeLabel(plan)}\``;
   if (plan.coder === "claude") {
     return plan.claudeSubagentMode === "off"
       ? `Workspace ready. Running ${runtime} without subagents.`

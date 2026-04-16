@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  normalizeCoderVersionOutput,
   normalizeConfiguredCoder,
   planCoderRun,
   resolveClaudeSubagentMode,
@@ -82,4 +83,9 @@ test("planCoderRun reports codex as not pinned when no model is configured", () 
     if (previousModel === undefined) delete process.env.CODEX_MODEL;
     else process.env.CODEX_MODEL = previousModel;
   }
+});
+
+test("normalizeCoderVersionOutput extracts the actual version token", () => {
+  assert.equal(normalizeCoderVersionOutput("codex-cli 0.121.0"), "0.121.0");
+  assert.equal(normalizeCoderVersionOutput("1.2.3"), "1.2.3");
 });
