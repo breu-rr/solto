@@ -109,7 +109,7 @@ Your target repo should live on GitHub, have a default branch and include a root
 
 ## Running Multiple Projects
 
-One `solto` instance can handle many repo/team pairs. Treat each entry in `projects.local.json` as one project: one GitHub repo, one Linear team webhook, one local clone, one worktree namespace and its own rate limits. Add a project by updating `projects.local.json`, running `./scripts/add-project.sh <id>`, creating that project’s Linear webhook, creating the repo’s GitHub `pull_request` webhook and restarting `solto`. Use one shared `GITHUB_WEBHOOK_SECRET` for all GitHub repo webhooks. For Linear, solto first looks for `LINEAR_WEBHOOK_SECRET` in `repos/<project-id>/.env`, then falls back to `LINEAR_WEBHOOK_SECRET` in the root `.env`. That keeps the common single-board setup simple while still allowing per-repo overrides.
+One `solto` instance can handle many repo/team pairs. Treat each entry in `projects.local.json` as one project: one GitHub repo, one bound Linear project, one local clone, one worktree namespace and its own rate limits. Add a project by updating `projects.local.json`, running `./scripts/add-project.sh <id>`, creating that project’s Linear webhook, creating the repo’s GitHub `pull_request` webhook and restarting `solto`. Use one shared `GITHUB_WEBHOOK_SECRET` for all GitHub repo webhooks. For Linear, solto first looks for `LINEAR_WEBHOOK_SECRET` in `repos/<project-id>/.env`, then falls back to `LINEAR_WEBHOOK_SECRET` in the root `.env`. `linearProjectId` in `projects.local.json` is the hard guard that binds each repo to exactly one Linear project so a misconfigured webhook cannot dispatch tickets into the wrong repo.
 
 Each project stays isolated:
 

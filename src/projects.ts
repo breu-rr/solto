@@ -6,6 +6,7 @@ import { resolveLinearWebhookSecret } from "./project-secrets.js";
 export interface ProjectConfig {
   id: string;
   githubRepo: string;
+  linearProjectId: string;
   repoPath: string;
   workersPath: string;
   webhookSecret: string;
@@ -18,6 +19,7 @@ export interface ProjectConfig {
 interface ProjectEntry {
   id: string;
   githubRepo: string;
+  linearProjectId?: string;
   githubBase?: string;
   maxParallel?: number;
   maxPerHour?: number;
@@ -41,9 +43,9 @@ function loadEntries(): ProjectEntry[] {
     throw new Error(`${CONFIG_PATH} must be a JSON array`);
   }
   for (const entry of parsed) {
-    if (!entry.id || !entry.githubRepo) {
+    if (!entry.id || !entry.githubRepo || !entry.linearProjectId) {
       throw new Error(
-        `Each entry in ${CONFIG_PATH} needs "id" and "githubRepo"`
+        `Each entry in ${CONFIG_PATH} needs "id", "githubRepo", and "linearProjectId"`
       );
     }
   }
@@ -59,6 +61,7 @@ function toConfig(entry: ProjectEntry): ProjectConfig {
   return {
     id: entry.id,
     githubRepo: entry.githubRepo,
+    linearProjectId: entry.linearProjectId!,
     githubBase: entry.githubBase ?? "main",
     maxParallel: entry.maxParallel ?? 2,
     maxPerHour: entry.maxPerHour ?? 10,

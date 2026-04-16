@@ -6,6 +6,7 @@ export interface LinearIssue {
   identifier: string;
   title: string;
   description: string;
+  projectId: string | null;
   teamId: string;
   stateName: string | null;
   assigneeId: string | null;
@@ -137,6 +138,7 @@ export async function getIssueById(
           identifier: string;
           title: string;
           description: string | null;
+          project: { id: string } | null;
           team: { id: string };
           state: { name: string } | null;
           assignee: { id: string } | null;
@@ -149,6 +151,7 @@ export async function getIssueById(
         identifier
         title
         description
+        project { id }
         team { id }
         state { name }
         assignee { id }
@@ -162,6 +165,7 @@ export async function getIssueById(
     identifier: data.issue.identifier,
     title: data.issue.title,
     description: data.issue.description ?? "",
+    projectId: data.issue.project?.id ?? null,
     teamId: data.issue.team.id,
     stateName: data.issue.state?.name ?? null,
     assigneeId: data.issue.assignee?.id ?? null,

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { issueBelongsToProject } from "../src/project-routing.ts";
 import { resolveLinearWebhookSecret } from "../src/project-secrets.ts";
 
 test("resolveLinearWebhookSecret prefers repo-local secret", async () => {
@@ -27,4 +28,19 @@ test("resolveLinearWebhookSecret falls back to shared secret", () => {
     if (previousShared === undefined) delete process.env.LINEAR_WEBHOOK_SECRET;
     else process.env.LINEAR_WEBHOOK_SECRET = previousShared;
   }
+});
+
+test("issueBelongsToProject requires an exact linearProjectId match", () => {
+  assert.equal(
+    issueBelongsToProject({ linearProjectId: "project-1" }, "project-1"),
+    true
+  );
+  assert.equal(
+    issueBelongsToProject({ linearProjectId: "project-1" }, "project-2"),
+    false
+  );
+  assert.equal(
+    issueBelongsToProject({ linearProjectId: "project-1" }, null),
+    false
+  );
 });

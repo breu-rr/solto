@@ -37,6 +37,12 @@ if [ -z "$github_repo" ] || [ "$github_repo" = "null" ]; then
     exit 1
 fi
 
+linear_project_id=$(jq -r --arg id "$id" '.[] | select(.id == $id) | .linearProjectId // empty' "$CONFIG")
+if [ -z "$linear_project_id" ]; then
+    echo "Project '$id' is missing linearProjectId in $CONFIG" >&2
+    exit 1
+fi
+
 repo_dir="$ROOT/repos/$id"
 worker_dir="$ROOT/workers/$id"
 env_file="$ROOT/.env"

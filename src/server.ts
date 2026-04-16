@@ -29,6 +29,7 @@ import {
   savePullRequestState,
 } from "./pr-state.js";
 import { recoverPullRequestState } from "./pr-recovery.js";
+import { issueBelongsToProject } from "./project-routing.js";
 import { PROJECTS } from "./projects.js";
 import {
   listRecentJobStates,
@@ -273,6 +274,7 @@ function updateTouchedAssigneeOrState(updatedFrom: unknown): boolean {
 
 async function getAssignmentTriggerIssue(
   projectId: string,
+  project: (typeof PROJECTS)[string],
   issueId: string,
   action: string,
   updatedFrom: unknown
@@ -286,6 +288,12 @@ async function getAssignmentTriggerIssue(
   });
   if (!issue) {
     return { issue: null, reason: `issue lookup failed for ${issueId}` };
+  }
+  if (!issueBelongsToProject(project, issue.projectId)) {
+    return {
+      issue: null,
+      reason: `issue project mismatch: ${issue.projectId ?? "unknown"} != ${project.linearProjectId}`,
+    };
   }
 
   const viewerId = await getViewerId().catch((err) => {
@@ -419,6 +427,7 @@ app.post("/webhook/:projectId", async (c) => {
 
     const { issue, reason, feedback } = await getAssignmentTriggerIssue(
       projectId,
+      project,
       issueFromWebhook.id,
       action,
       updatedFrom
@@ -482,6 +491,12 @@ app.post("/webhook/:projectId", async (c) => {
         console.log(`[webhook] ignored comment (issue lookup failed for ${issueId})`);
         return c.text("OK");
       }
+      if (!issueBelongsToProject(project, issue.projectId)) {
+        console.log(
+          `[webhook] ignored comment (issue project mismatch: ${issue.projectId ?? "unknown"} != ${project.linearProjectId})`
+        );
+        return c.text("OK");
+      }
       if (!issueIsValid(issue)) {
         console.log(`[webhook] rejected malformed issue from comment lookup: ${issue.id}/${issue.identifier}`);
         return c.text("Bad Request", 400);
@@ -518,6 +533,12 @@ app.post("/webhook/:projectId", async (c) => {
     });
     if (!issue) {
       console.log(`[webhook] ignored comment (issue lookup failed for ${issueId})`);
+      return c.text("OK");
+    }
+    if (!issueBelongsToProject(project, issue.projectId)) {
+      console.log(
+        `[webhook] ignored comment (issue project mismatch: ${issue.projectId ?? "unknown"} != ${project.linearProjectId})`
+      );
       return c.text("OK");
     }
     if (!issueIsValid(issue)) {

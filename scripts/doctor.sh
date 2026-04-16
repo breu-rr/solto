@@ -286,7 +286,14 @@ for project_id in "${PROJECT_IDS[@]}"; do
     repo_dir="$ROOT/repos/$project_id"
     workers_dir="$ROOT/workers/$project_id"
     github_repo="$(jq -r --arg id "$project_id" '.[] | select(.id == $id) | .githubRepo' "$ROOT/projects.local.json")"
+    linear_project_id="$(jq -r --arg id "$project_id" '.[] | select(.id == $id) | .linearProjectId // empty' "$ROOT/projects.local.json")"
     repo_env_file="$repo_dir/.env"
+
+    if [ -n "$linear_project_id" ]; then
+        pass "$project_id linearProjectId configured"
+    else
+        fail "$project_id missing linearProjectId in projects.local.json"
+    fi
 
     if env_file_has "$repo_env_file" LINEAR_WEBHOOK_SECRET; then
         pass "$project_id repo-local LINEAR_WEBHOOK_SECRET configured"
