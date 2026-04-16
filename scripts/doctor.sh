@@ -122,6 +122,37 @@ compare_pm2_env() {
     fi
 }
 
+check_github_webhook() {
+    local project_id="$1"
+    local github_repo="$2"
+    local hooks match hook_id hook_url
+
+    if ! hooks="$(gh api "repos/$github_repo/hooks" 2>/dev/null)"; then
+        fail "$project_id cannot list GitHub webhooks for $github_repo"
+        return
+    fi
+
+    match="$(
+        jq -r '
+            [ .[]
+              | select(.active == true)
+              | select((.events // []) | index("pull_request"))
+              | select((.config.url // "") | endswith("/github-webhook"))
+              | select((.config.content_type // "") == "json")
+            ]
+            | if length > 0 then .[0] | "\(.id)\t\(.config.url)" else empty end
+        ' <<<"$hooks" 2>/dev/null || true
+    )"
+
+    if [ -n "$match" ]; then
+        hook_id="${match%%$'\t'*}"
+        hook_url="${match#*$'\t'}"
+        pass "$project_id GitHub pull_request webhook present ($hook_id -> $hook_url)"
+    else
+        fail "$project_id missing active GitHub pull_request webhook to /github-webhook"
+    fi
+}
+
 section "Core files"
 check_file "$ROOT/package.json" "package.json"
 check_file "$ROOT/ecosystem.config.cjs" "ecosystem config"
@@ -269,6 +300,12 @@ if gh auth status > "$GH_AUTH_TMP" 2>&1; then
 else
     fail "gh auth status failed"
 fi
+
+section "GitHub webhooks"
+for project_id in "${PROJECT_IDS[@]}"; do
+    github_repo="$(jq -r --arg id "$project_id" '.[] | select(.id == $id) | .githubRepo' "$ROOT/projects.local.json")"
+    check_github_webhook "$project_id" "$github_repo"
+done
 
 section "Linear API"
 if env_has LINEAR_API_KEY; then
