@@ -100,7 +100,7 @@ eval "$(~/.local/bin/mise activate bash)"
 
 if [ -d "$SOLTO_DIR/.git" ]; then
     echo "→ updating existing checkout at $SOLTO_DIR"
-    git -C "$SOLTO_DIR" fetch --tags origin
+    git -C "$SOLTO_DIR" fetch --force --tags origin
     if git -C "$SOLTO_DIR" rev-parse -q --verify "refs/tags/$SOLTO_REF" >/dev/null; then
         git -C "$SOLTO_DIR" checkout --detach "$SOLTO_REF"
     else

@@ -100,7 +100,7 @@ else
 fi
 
 echo "--- Fetching ${TARGET_REF}"
-git fetch --tags origin
+git fetch --force --tags origin
 
 if git rev-parse -q --verify "refs/tags/$TARGET_REF" >/dev/null; then
     git checkout --detach "$TARGET_REF"
