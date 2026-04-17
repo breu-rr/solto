@@ -193,6 +193,91 @@ check_github_webhook() {
     fi
 }
 
+check_linear_webhook() {
+    local payload team_payload
+    payload="$(
+        curl -fsS --max-time 10 \
+            -H "Content-Type: application/json" \
+            -H "Authorization: $(env_get LINEAR_API_KEY)" \
+            --data '{"query":"query { webhooks { nodes { id url enabled team { id name } } } }"}' \
+            https://api.linear.app/graphql 2>/dev/null || true
+    )"
+
+    if [ -z "$payload" ]; then
+        warn "Could not query Linear webhooks; verify a team-level webhook points to /linear-webhook"
+        return
+    fi
+
+    if jq -e '.errors' >/dev/null 2>&1 <<<"$payload"; then
+        warn "Could not query Linear webhooks with the current API key; verify a team-level webhook points to /linear-webhook"
+        return
+    fi
+
+    team_payload="$(
+        curl -fsS --max-time 10 \
+            -H "Content-Type: application/json" \
+            -H "Authorization: $(env_get LINEAR_API_KEY)" \
+            --data '{"query":"query { projects { nodes { id name team { id name } } } }"}' \
+            https://api.linear.app/graphql 2>/dev/null || true
+    )"
+
+    if [ -z "$team_payload" ] || jq -e '.errors' >/dev/null 2>&1 <<<"$team_payload"; then
+        warn "Could not resolve configured Linear projects to teams; verify each team has a webhook to /linear-webhook"
+        return
+    fi
+
+    mapfile -t LINEAR_TEAM_ROWS < <(
+        jq -r --argjson project_ids "$(jq -c '[.[].linearProjectId]' "$ROOT/projects.local.json")" '
+            [
+              .data.projects.nodes[]
+              | select(.id as $id | $project_ids | index($id))
+              | { teamId: (.team.id // ""), teamName: (.team.name // "unknown") }
+            ]
+            | unique_by(.teamId)
+            | .[]
+            | "\(.teamId)\t\(.teamName)"
+        ' <<<"$team_payload" 2>/dev/null
+    )
+
+    if [ "${#LINEAR_TEAM_ROWS[@]}" -eq 0 ]; then
+        warn "Could not match configured linearProjectId values to Linear teams; verify team webhooks manually"
+        return
+    fi
+
+    local row team_id team_name match_count
+    for row in "${LINEAR_TEAM_ROWS[@]}"; do
+        team_id="${row%%$'\t'*}"
+        team_name="${row#*$'\t'}"
+        match_count="$(
+            jq -r --arg team_id "$team_id" '
+                [
+                  .data.webhooks.nodes[]
+                  | select(.enabled == true)
+                  | select((.url // "") | endswith("/linear-webhook"))
+                  | select((.team.id // "") == "" or (.team.id // "") == $team_id)
+                ] | length
+            ' <<<"$payload" 2>/dev/null || echo 0
+        )"
+
+        if [ "${match_count:-0}" -gt 0 ]; then
+            pass "Linear webhook present to /linear-webhook for team ${team_name}"
+        else
+            fail "Missing enabled Linear webhook to /linear-webhook for team ${team_name}"
+        fi
+    done
+
+    if jq -e '
+        [
+          .data.webhooks.nodes[]
+          | select(.enabled == true)
+          | select((.url // "") | endswith("/linear-webhook"))
+          | select((.team.id // "") == "")
+        ] | length > 0
+    ' >/dev/null 2>&1 <<<"$payload"; then
+        pass "Organization-level Linear webhook to /linear-webhook present"
+    fi
+}
+
 section "Core files"
 check_file "$ROOT/package.json" "package.json"
 check_file "$ROOT/ecosystem.config.cjs" "ecosystem config"
@@ -383,6 +468,11 @@ if env_has LINEAR_API_KEY; then
     else
         fail "Linear API request failed"
     fi
+fi
+
+section "Linear webhooks"
+if env_has LINEAR_API_KEY; then
+    check_linear_webhook
 fi
 
 section "pm2"

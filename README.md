@@ -33,6 +33,13 @@ cd ~/solto
 
 That upgrades to the latest available release, refreshes dependencies and reloads `pm2`. For the full setup and operations guide, including `latest`, `main` and pinned-tag examples, see [ZERO_TO_SOLTO.md](./ZERO_TO_SOLTO.md).
 
+If you want a preview first:
+
+```bash
+bash install.sh --dry-run
+./scripts/upgrade.sh --dry-run
+```
+
 That guide also covers the simplest Cloudflare setup path with `./scripts/setup-tunnel.sh <your-host>.<your-domain>`.
 
 After install or any auth/config change, run:
@@ -68,17 +75,17 @@ When `CODER=claude`, solto enables Claude subagents for research, implementation
 
 An issue starts when it ends up both:
 
-- Assigned to the Bot User.
+- Assigned to the bot user.
 - In `Todo` / `To do`.
 
 ### Naming Commits and Branches
 
 Commit and branch naming are driven by Linear labels:
 
-- <kbd>type:feat</kbd>, <kbd>type:fix</kbd>, <kbd>type:docs</kbd>, <kbd>type:chore</kbd>, etc. Set the Conventional Commit Type Solto Uses.
-- Bare Labels Like <kbd>feat</kbd>, <kbd>fix</kbd>, <kbd>docs</kbd> and <kbd>chore</kbd> Also Work.
-- That Type Is Used for Both the Branch Name and the Fallback Commit Message, for Example `docs/MOBILE-123-update-readme` and `docs: Update README`.
-- If No Type Label Is Present, Solto Defaults to <kbd>chore</kbd>.
+- <kbd>type:feat</kbd>, <kbd>type:fix</kbd>, <kbd>type:docs</kbd>, <kbd>type:chore</kbd>, etc. set the conventional commit type solto uses.
+- Bare labels like <kbd>feat</kbd>, <kbd>fix</kbd>, <kbd>docs</kbd> and <kbd>chore</kbd> also work.
+- That type is used for both the branch name and the fallback commit message, for example `docs/MOBILE-123-update-readme` and `docs: Update README`.
+- If no type label is present, solto defaults to <kbd>chore</kbd>.
 
 ### YOLO
 
@@ -92,6 +99,10 @@ For follow-up changes on an existing PR, comment with the bot mention, usually `
 @solto-bot address the review feedback about dependency versions and rerun lint
 ```
 
+### Attachments
+
+solto does its best to turn Linear attachments into useful agent context. Text-like attachments, embedded text and SVGs are passed through directly. Images are summarized when `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is configured and the provider can read them. Other binaries are treated as best-effort context and may be ignored if solto cannot extract anything useful from them.
+
 ## Trust Model
 
 > [!WARNING]
@@ -99,13 +110,13 @@ For follow-up changes on an existing PR, comment with the bot mention, usually `
 
 ## Requirements
 
-- A Linux Host With a Dedicated `agent` User.
+- A Linux host with a dedicated `agent` user.
 - [Node LTS](https://nodejs.org/), [pnpm](https://pnpm.io/), [pm2](https://pm2.keymetrics.io/), [git](https://git-scm.com/), [`gh`](https://cli.github.com/) and [`jq`](https://jqlang.org/).
-- One Coding Agent CLI: [Codex](https://github.com/openai/codex) (Default) or [Claude Code](https://docs.claude.com/en/docs/claude-code/overview).
-- Public HTTPS to `localhost:3000` for Linear Webhooks. The Default Setup Uses [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/), but Any HTTPS Ingress Works.
-- A [Linear](https://linear.app/) Workspace and a [GitHub](https://github.com/) Account That Can Push Branches and Open PRs on Your Target Repos.
+- One coding agent CLI: [Codex](https://github.com/openai/codex) (default) or [Claude Code](https://docs.claude.com/en/docs/claude-code/overview).
+- Public HTTPS to `localhost:3000` for Linear webhooks. The default setup uses [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/), but any HTTPS ingress works.
+- A [Linear](https://linear.app/) workspace and a [GitHub](https://github.com/) account that can push branches and open PRs on your target repos.
 
-Each managed target repo should live on GitHub, have a default branch and include its own root `AGENTS.md` with code style, test commands, dependency policy and any “don’t touch this” rules. This is about the repo under `repos/<id>/`, not the `solto` repo itself. If a target repo needs env vars or special setup, document that in its `AGENTS.md` or provide an `.env.example`.
+Each managed target repo should live on GitHub, have a default branch and include its own root `AGENTS.md`. This is about the repo under `repos/<id>/`, not the `solto` repo itself.
 
 ## Running Multiple Projects
 
@@ -113,10 +124,10 @@ One `solto` instance can handle many repos and Linear projects under one GitHub 
 
 Each project stays isolated:
 
-- `repos/<id>/` Holds the Repo Clone.
-- `workers/<id>/` Holds the Active Worktrees.
-- `projects.local.json` Controls Concurrency and Rate Limits.
-- `/status` Shows Each Project Independently.
+- `repos/<id>/` holds the repo clone.
+- `workers/<id>/` holds the active worktrees.
+- `projects.local.json` controls concurrency and rate limits.
+- `/status` shows each project independently.
 
 For runtime checks:
 
@@ -157,11 +168,5 @@ curl -H "x-status-token: <STATUS_TOKEN>" "https://<your-webhook-host>/status?inc
 ## License
 
 ISC
-
----
-
-<p align="center">
-  <img src="./assets/footer-credit.svg" alt="Sao Paulo, Brazil" style="opacity: 0.45;" />
-</p>
 
 <!-- <video src="https://github.com/user-attachments/assets/67de91de-d874-4b8d-9578-5d8cf5ff2d8a" muted playsinline></video> -->

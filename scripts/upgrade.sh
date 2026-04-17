@@ -6,6 +6,7 @@
 #   ./scripts/upgrade.sh latest
 #   ./scripts/upgrade.sh main
 #   ./scripts/upgrade.sh v0.1.0
+#   ./scripts/upgrade.sh --dry-run [latest|main|v0.1.0]
 #
 # Expected environment:
 #   Run this from the solto checkout on the host, as the agent user.
@@ -14,6 +15,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DRY_RUN=0
+if [ "${1:-}" = "--dry-run" ]; then
+    DRY_RUN=1
+    shift
+fi
 TARGET_INPUT="${1:-latest}"
 
 require_cmd() {
@@ -84,11 +90,6 @@ fi
 
 cd "$ROOT"
 
-if [ -n "$(git status --porcelain)" ]; then
-    echo "Working tree is dirty. Commit or stash changes before upgrading." >&2
-    exit 1
-fi
-
 TARGET_REF="$(resolve_target_ref "$TARGET_INPUT")"
 TUNNEL_HOSTNAME="$(detect_tunnel_hostname)"
 if [ -n "$TUNNEL_HOSTNAME" ]; then
@@ -97,6 +98,43 @@ if [ -n "$TUNNEL_HOSTNAME" ]; then
 else
     TUNNEL_SETUP_CMD="./scripts/setup-tunnel.sh <your-host>.<your-domain>"
     TUNNEL_HEALTH_CMD="curl https://<your-host>.<your-domain>/health"
+fi
+
+if [ "$DRY_RUN" = "1" ]; then
+    if [ -n "$(git status --porcelain)" ]; then
+        DIRTY_NOTE="yes"
+    else
+        DIRTY_NOTE="no"
+    fi
+    cat <<EOF
+--- upgrade dry run
+
+Resolved settings:
+  ROOT=${ROOT}
+  TARGET_INPUT=${TARGET_INPUT}
+  TARGET_REF=${TARGET_REF}
+  WORKTREE_DIRTY=${DIRTY_NOTE}
+
+Would perform:
+  1. git fetch --force --tags origin
+  2. Check out ${TARGET_REF} (tag, branch, or fetched ref)
+  3. Run pnpm install --frozen-lockfile
+  4. Restart pm2 processes from ecosystem.config.cjs with --update-env
+  5. Save the pm2 process list
+
+Post-upgrade reminders:
+  ./scripts/doctor.sh
+  ${TUNNEL_SETUP_CMD}
+  ${TUNNEL_HEALTH_CMD}
+
+No changes were made.
+EOF
+    exit 0
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+    echo "Working tree is dirty. Commit or stash changes before upgrading." >&2
+    exit 1
 fi
 
 echo "--- Fetching ${TARGET_REF}"

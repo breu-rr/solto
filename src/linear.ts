@@ -6,10 +6,20 @@ export interface LinearIssue {
   identifier: string;
   title: string;
   description: string;
+  attachments: LinearAttachment[];
   projectId: string | null;
   teamId: string;
   stateName: string | null;
   assigneeId: string | null;
+}
+
+export interface LinearAttachment {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  url: string;
+  sourceType: string | null;
+  bodyData: string | null;
 }
 
 export interface LinearComment {
@@ -138,6 +148,16 @@ export async function getIssueById(
           identifier: string;
           title: string;
           description: string | null;
+          attachments: {
+            nodes: Array<{
+              id: string;
+              title: string;
+              subtitle: string | null;
+              url: string;
+              sourceType: string | null;
+              bodyData: string | null;
+            }>;
+          };
           project: { id: string } | null;
           team: { id: string };
           state: { name: string } | null;
@@ -151,6 +171,16 @@ export async function getIssueById(
         identifier
         title
         description
+        attachments(first: 20) {
+          nodes {
+            id
+            title
+            subtitle
+            url
+            sourceType
+            bodyData
+          }
+        }
         project { id }
         team { id }
         state { name }
@@ -165,6 +195,14 @@ export async function getIssueById(
     identifier: data.issue.identifier,
     title: data.issue.title,
     description: data.issue.description ?? "",
+    attachments: data.issue.attachments.nodes.map((attachment) => ({
+      id: attachment.id,
+      title: attachment.title,
+      subtitle: attachment.subtitle,
+      url: attachment.url,
+      sourceType: attachment.sourceType,
+      bodyData: attachment.bodyData,
+    })),
     projectId: data.issue.project?.id ?? null,
     teamId: data.issue.team.id,
     stateName: data.issue.state?.name ?? null,

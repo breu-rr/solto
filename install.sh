@@ -10,8 +10,15 @@
 #   SOLTO_REF=latest   # or main or a specific tag like v0.1.0
 #   AGENT_USER=agent
 #   SOLTO_DIR=/home/agent/solto
+#   DRY_RUN=1          # print what would happen without changing the machine
 
 set -euo pipefail
+
+DRY_RUN="${DRY_RUN:-0}"
+if [ "${1:-}" = "--dry-run" ]; then
+    DRY_RUN=1
+    shift
+fi
 
 if [ "${EUID:-$(id -u)}" -ne 0 ]; then
     echo "Run as root or via sudo." >&2
@@ -69,6 +76,33 @@ bootstrap_url_for_ref() {
 
 SOLTO_REF="$(resolve_ref "$SOLTO_REF_INPUT")"
 BOOTSTRAP_URL="$(bootstrap_url_for_ref "$SOLTO_REPO" "$SOLTO_REF")"
+
+if [ "$DRY_RUN" = "1" ]; then
+    AGENT_HOME="$(getent passwd "$AGENT_USER" | cut -d: -f6)"
+    cat <<EOF
+--- install dry run
+
+Resolved settings:
+  SOLTO_REPO=${SOLTO_REPO}
+  SOLTO_REF=${SOLTO_REF}
+  AGENT_USER=${AGENT_USER}
+  AGENT_HOME=${AGENT_HOME}
+  SOLTO_DIR=${SOLTO_DIR}
+  REPO_URL=${REPO_URL}
+  BOOTSTRAP_URL=${BOOTSTRAP_URL}
+
+Would perform:
+  1. Run bootstrap from ${BOOTSTRAP_URL}.
+  2. Clone or update ${REPO_URL} into ${SOLTO_DIR} as ${AGENT_USER}.
+  3. Run pnpm install in ${SOLTO_DIR}.
+  4. Seed .env from .env.example if missing.
+  5. Seed projects.local.json from projects.local.json.example if missing.
+  6. Mark scripts executable.
+
+No changes were made.
+EOF
+    exit 0
+fi
 
 echo "--- Running bootstrap from ${SOLTO_REF}"
 bash -c "$(curl -fsSL "$BOOTSTRAP_URL")"

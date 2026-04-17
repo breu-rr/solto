@@ -39,6 +39,7 @@ import {
   markAllRunningJobsInterrupted,
   saveJobState,
 } from "./run-state.js";
+import { cleanupIssueWorkspace } from "./workspace-cleanup.js";
 import {
   compactStartupNoise,
   dedupeSequential,
@@ -653,7 +654,19 @@ app.post("/github-webhook", async (c) => {
     console.error(`[github-webhook] failed to sync PR attachment for ${issue.id}:`, err);
   });
   await setIssueState(issue.id, issue.teamId, STATE_DONE);
-  await deletePullRequestState(issue.id);
+  const cleanupResult = await cleanupIssueWorkspace(
+    project,
+    issue.id,
+    prState.branch
+  ).catch((err) => {
+    console.error(`[github-webhook] failed to clean workspace for ${issue.id}:`, err);
+    return null;
+  });
+  if (cleanupResult === "skipped_running") {
+    console.log(`[github-webhook] skipped workspace cleanup for ${issue.id} because the job is still running`);
+  } else if (cleanupResult === "cleaned") {
+    await deletePullRequestState(issue.id);
+  }
 
   console.log(`[github-webhook] marked ${issue.id} done after merge: ${prUrl}`);
   return c.text("OK");

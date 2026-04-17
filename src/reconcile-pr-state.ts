@@ -14,6 +14,7 @@ import {
   type PullRequestState,
 } from "./pr-state.js";
 import { parsePullRequestNumber } from "./reconcile-utils.js";
+import { cleanupIssueWorkspace } from "./workspace-cleanup.js";
 
 interface GitHubPullRequestDetails {
   state: string;
@@ -97,7 +98,15 @@ async function reconcileEntry(
     }
 
     if (!dryRun) {
-      await deletePullRequestState(entry.issueId);
+      const cleanupResult = await cleanupIssueWorkspace(project, entry.issueId, entry.branch).catch((err) => {
+        console.error(`[reconcile] failed to clean workspace for ${entry.issueId}:`, err);
+        return null;
+      });
+      if (cleanupResult === "cleaned") {
+        await deletePullRequestState(entry.issueId);
+      } else if (cleanupResult === "skipped_running") {
+        console.log(`[reconcile] skipped workspace cleanup for ${entry.issueId} because the job is still running`);
+      }
     }
     return {
       status: "reconciled",
@@ -109,7 +118,15 @@ async function reconcileEntry(
   }
 
   if (!dryRun) {
-    await deletePullRequestState(entry.issueId);
+    const cleanupResult = await cleanupIssueWorkspace(project, entry.issueId, entry.branch).catch((err) => {
+      console.error(`[reconcile] failed to clean workspace for ${entry.issueId}:`, err);
+      return null;
+    });
+    if (cleanupResult === "cleaned") {
+      await deletePullRequestState(entry.issueId);
+    } else if (cleanupResult === "skipped_running") {
+      console.log(`[reconcile] skipped workspace cleanup for ${entry.issueId} because the job is still running`);
+    }
   }
   return { status: "pruned", reason: "closed without merge" };
 }

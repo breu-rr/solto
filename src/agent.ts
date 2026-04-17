@@ -1,5 +1,15 @@
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileTypeFromBuffer } from "file-type";
 import { buildCompletionSummary } from "./change-summary.js";
+import {
+  buildLinearAttachmentAuthHeader,
+  buildAttachmentPromptBlock,
+  isLikelyImageAttachment,
+  isLikelyTextAttachment,
+  sanitizeAttachmentFilename,
+  type AttachmentPromptEntry,
+} from "./attachment-context.js";
 import { exec, execSilent } from "./exec.js";
 import {
   syncPullRequestAttachment,
@@ -9,6 +19,7 @@ import {
   STATE_IN_PROGRESS,
   STATE_IN_REVIEW,
   STATE_TODO,
+  type LinearAttachment,
   type LinearIssue,
 } from "./linear.js";
 import {
@@ -52,6 +63,7 @@ export async function runAgent(
   const prFile = `/tmp/solto-pr-${issue.id}.md`;
   const summaryFile = `/tmp/solto-summary-${issue.id}.md`;
   const metadataFile = `/tmp/solto-run-${issue.id}.json`;
+  let attachmentDir: string | null = null;
   const isIteration = Boolean(opts.existingPr);
   const initialRunState = await getJobState(issue.id).catch(() => null);
   const startedAt = initialRunState?.startedAt ?? new Date().toISOString();
@@ -94,6 +106,13 @@ export async function runAgent(
       prUrl: opts.existingPr?.prUrl,
     });
 
+    const attachmentContext = await materializeIssueAttachments(
+      issue.attachments,
+      worktree
+    );
+    attachmentDir = attachmentContext.dir;
+    const attachmentPromptBlock = attachmentContext.promptBlock;
+
     await postLinearComment(issue.id, buildRunStartedComment(runPlan));
     const completedPlan = await runCoder(
       runPlan,
@@ -101,6 +120,7 @@ export async function runAgent(
         prFile,
         summaryFile,
         metadataFile,
+        attachmentPromptBlock,
         followUpInstruction: opts.followUpInstruction,
         existingPrUrl: opts.existingPr?.prUrl,
         taskProfile,
@@ -112,18 +132,20 @@ export async function runAgent(
       `${CODER_DISPLAY_NAMES[completedPlan.coder]} finished. Running final summary.`
     );
 
-    const diffStat = await exec("git", [
-      "-C", worktree, "diff", "--stat", `origin/${base}`,
-    ]).catch(() => "");
-    const diffPatch = await exec("git", [
-      "-C", worktree, "diff", "--no-ext-diff", `origin/${base}`,
-    ]).catch(() => "");
-    const changedFiles = await exec("git", [
-      "-C", worktree, "diff", "--name-only", `origin/${base}`,
-    ]).catch(() => "");
-    const numstat = await exec("git", [
-      "-C", worktree, "diff", "--numstat", `origin/${base}`,
-    ]).catch(() => "");
+    const [diffStat, diffPatch, changedFiles, numstat] = await Promise.all([
+      exec("git", [
+        "-C", worktree, "diff", "--stat", `origin/${base}`,
+      ]).catch(() => ""),
+      exec("git", [
+        "-C", worktree, "diff", "--no-ext-diff", `origin/${base}`,
+      ]).catch(() => ""),
+      exec("git", [
+        "-C", worktree, "diff", "--name-only", `origin/${base}`,
+      ]).catch(() => ""),
+      exec("git", [
+        "-C", worktree, "diff", "--numstat", `origin/${base}`,
+      ]).catch(() => ""),
+    ]);
     const hasChanges = diffStat.trim().length > 0;
     const agentSummary = await readFile(summaryFile, "utf8").catch(() => "");
     const metadata = parseAgentRunMetadata(
@@ -355,6 +377,9 @@ export async function runAgent(
     await rm(prFile, { force: true }).catch(() => {});
     await rm(summaryFile, { force: true }).catch(() => {});
     await rm(metadataFile, { force: true }).catch(() => {});
+    if (attachmentDir) {
+      await rm(attachmentDir, { recursive: true, force: true }).catch(() => {});
+    }
   }
 }
 
@@ -471,6 +496,7 @@ function buildPrompt(
     prFile: string;
     summaryFile: string;
     metadataFile: string;
+    attachmentPromptBlock?: string;
     followUpInstruction?: string;
     existingPrUrl?: string;
     taskProfile: TaskProfile;
@@ -543,7 +569,7 @@ Task: ${issue.title}
 Details:
 ${issue.description}
 
-${followUpBlock}${existingPrBlock}Instructions:
+${opts.attachmentPromptBlock ? `${opts.attachmentPromptBlock}\n\n` : ""}${followUpBlock}${existingPrBlock}Instructions:
 - ${modeInstruction}
 - Read AGENTS.md at the repo root FIRST and follow every rule in it
   (style, commit format, attribution, dependency policy, workflow). It
@@ -587,4 +613,257 @@ function slugify(str: string): string {
     .replace(/^-+|-+$/g, "");
 
   return slug.slice(0, MAX_BRANCH_TITLE_SLUG_LENGTH).replace(/-+$/g, "");
+}
+
+async function materializeIssueAttachments(
+  attachments: LinearAttachment[],
+  worktree: string
+): Promise<{ dir: string | null; promptBlock: string }> {
+  if (!attachments.length) return { dir: null, promptBlock: "" };
+
+  const promptEntries: AttachmentPromptEntry[] = [];
+  let dir: string | null = null;
+
+  async function ensureDir(): Promise<string> {
+    if (!dir) {
+      dir = await mkdtemp(path.join(worktree, ".solto-attachments-"));
+    }
+    return dir;
+  }
+
+  for (const [index, attachment] of attachments.slice(0, 10).entries()) {
+    const fallbackName = `${index + 1}-${attachment.title || "attachment"}`;
+    try {
+      if (attachment.bodyData?.trim()) {
+        const attachmentDir = await ensureDir();
+        const filename = sanitizeAttachmentFilename(`${fallbackName}.md`);
+        const localPath = path.join(attachmentDir, filename);
+        await writeFile(localPath, attachment.bodyData, "utf8");
+        promptEntries.push({
+          title: attachment.title,
+          subtitle: attachment.subtitle,
+          sourceType: attachment.sourceType,
+          url: attachment.url,
+          localPath,
+        });
+        continue;
+      } else {
+        const url = new URL(attachment.url);
+        const headers: Record<string, string> = {};
+        const authHeader = buildLinearAttachmentAuthHeader(process.env.LINEAR_API_KEY);
+        if (
+          authHeader
+          && (url.hostname === "linear.app" || url.hostname.endsWith(".linear.app"))
+        ) {
+          headers.authorization = authHeader;
+        }
+
+        const response = await fetch(attachment.url, {
+          headers,
+          redirect: "follow",
+        });
+        if (!response.ok) continue;
+
+        const contentType = response.headers.get("content-type");
+        const extFromUrl = path.extname(url.pathname);
+        const filename = sanitizeAttachmentFilename(
+          extFromUrl ? `${fallbackName}${extFromUrl}` : fallbackName
+        );
+        const arrayBuffer = await response.arrayBuffer();
+        const bytes = Buffer.from(arrayBuffer);
+
+        if (isLikelyTextAttachment(attachment.url, contentType)) {
+          const attachmentDir = await ensureDir();
+          const localPath = path.join(attachmentDir, filename);
+          await writeFile(localPath, bytes);
+          promptEntries.push({
+            title: attachment.title,
+            subtitle: attachment.subtitle,
+            sourceType: attachment.sourceType,
+            url: attachment.url,
+            localPath,
+          });
+          continue;
+        }
+
+        const sniffedType = await fileTypeFromBuffer(bytes).catch(() => undefined);
+        const imageMime = sniffedType?.mime
+          ?? normalizeImageMimeType(contentType)
+          ?? (isLikelyImageAttachment(attachment.url, contentType)
+            ? inferImageMimeType(filename)
+            : null);
+
+        if (!imageMime) continue;
+
+        const imageSummary = await summarizeImageAttachment(bytes, imageMime);
+        if (!imageSummary) continue;
+
+        const attachmentDir = await ensureDir();
+        const localPath = path.join(attachmentDir, filename);
+        await writeFile(localPath, bytes);
+        promptEntries.push({
+          title: attachment.title,
+          subtitle: attachment.subtitle,
+          sourceType: attachment.sourceType,
+          url: attachment.url,
+          localPath,
+          note: "image attachment summarized for agent context",
+          summary: imageSummary,
+        });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return {
+    dir,
+    promptBlock: buildAttachmentPromptBlock(promptEntries),
+  };
+}
+
+async function summarizeImageAttachment(
+  bytes: Buffer,
+  mime: string
+): Promise<string | null> {
+  try {
+    const openAISummary = await summarizeImageWithOpenAI(bytes, mime);
+    if (openAISummary) return openAISummary;
+
+    return await summarizeImageWithAnthropic(bytes, mime);
+  } catch {
+    return null;
+  }
+}
+
+async function summarizeImageWithOpenAI(
+  bytes: Buffer,
+  mime: string
+): Promise<string | null> {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return null;
+
+  const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
+  const model = process.env.ATTACHMENT_SUMMARY_MODEL?.trim() || "gpt-4.1-mini";
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "Summarize this project attachment for a coding agent in 2 short sentences. Focus on UI, layout, copy, visual states, and implementation-relevant details only.",
+            },
+            {
+              type: "input_image",
+              image_url: dataUrl,
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) return null;
+  const json = await response.json() as { output_text?: string };
+  return json.output_text?.trim() || null;
+}
+
+async function summarizeImageWithAnthropic(
+  bytes: Buffer,
+  mime: string
+): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) return null;
+  if (!isAnthropicVisionMimeType(mime)) return null;
+
+  const model = process.env.ATTACHMENT_SUMMARY_CLAUDE_MODEL?.trim()
+    || "claude-sonnet-4-20250514";
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 160,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: mime,
+                data: bytes.toString("base64"),
+              },
+            },
+            {
+              type: "text",
+              text: "Summarize this project attachment for a coding agent in 2 short sentences. Focus on UI, layout, copy, visual states, and implementation-relevant details only.",
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) return null;
+  const json = await response.json() as {
+    content?: Array<{ type?: string; text?: string }>;
+  };
+  const text = json.content
+    ?.filter((block) => block.type === "text" && block.text)
+    .map((block) => block.text?.trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+  return text || null;
+}
+
+function inferImageMimeType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  switch (ext) {
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".webp":
+      return "image/webp";
+    case ".gif":
+      return "image/gif";
+    case ".bmp":
+      return "image/bmp";
+    case ".avif":
+      return "image/avif";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+function normalizeImageMimeType(contentType: string | null): string | null {
+  const mime = contentType?.split(";")[0]?.trim().toLowerCase();
+  if (!mime?.startsWith("image/")) return null;
+  if (mime === "image/svg+xml") return null;
+  return mime;
+}
+
+function isAnthropicVisionMimeType(mime: string): boolean {
+  return [
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+  ].includes(mime.toLowerCase());
 }

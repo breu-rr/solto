@@ -19,12 +19,19 @@ SOLTO_REF=v0.4.2 curl -fsSL https://raw.githubusercontent.com/breu-rr/solto/main
 
 Run those as root, or prefix them with `sudo` if needed.
 
+If you want a preview first:
+
+```bash
+bash install.sh --dry-run
+./scripts/upgrade.sh --dry-run
+```
+
 This does four things:
 
 - Runs `scripts/bootstrap.sh`.
-- Clones or Updates `~/solto`.
+- Clones or updates `~/solto`.
 - Runs `pnpm install`.
-- Seeds `.env` and `projects.local.json` From the Examples if They Are Missing.
+- Seeds `.env` and `projects.local.json` from the examples if they are missing.
 
 It intentionally does not try to automate the interactive or environment-specific steps:
 
@@ -32,9 +39,9 @@ It intentionally does not try to automate the interactive or environment-specifi
 - `codex login` or Claude Auth / API Key Setup.
 - Editing `.env`.
 - Editing `projects.local.json`.
-- Cloudflare Tunnel Setup.
-- Linear Webhook Creation.
-- GitHub Webhook Creation.
+- Cloudflare tunnel setup.
+- Linear webhook creation.
+- GitHub webhook creation.
 
 After the installer finishes, continue with:
 
@@ -134,7 +141,13 @@ solto uses [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/
 > [!NOTE]
 > Use a dedicated Linear user such as `solto-bot` for `LINEAR_API_KEY` so automation comments and state changes are isolated from your personal account.
 >
-> For multiple repos or teams, keep one project entry per repo/team pair. The shared host settings stay the same, and each project still gets its own GitHub repo webhook, clone and worktree directory. A single `solto` instance assumes one GitHub identity for the whole host. If a repo needs a different GitHub user, run a separate `solto` instance on another host. For Linear, solto first looks for `LINEAR_WEBHOOK_SECRET` in `repos/<project-id>/.env`, then falls back to `LINEAR_WEBHOOK_SECRET` in the root `.env`. If several projects live under the same Linear team, they can all share one team-level webhook pointing to `/linear-webhook`. If projects live under different Linear teams, create one Linear webhook per team, all pointing to the same `/linear-webhook` URL. You can seed a new entry with the exact `linearProjectName`, and `./scripts/add-project.sh` will resolve and persist the real `linearProjectId` back into `projects.local.json`. That `linearProjectId` is the hard binding between one Linear project and one GitHub repo, which prevents a shared board from dispatching the wrong ticket into the wrong repo.
+> For multiple repos or teams, keep one project entry per repo/team pair.
+> - A single `solto` instance assumes one GitHub identity for the whole host. If a repo needs a different GitHub user, run a separate `solto` instance on another host.
+> - For Linear secrets, solto first looks for `LINEAR_WEBHOOK_SECRET` in `repos/<project-id>/.env`, then falls back to `LINEAR_WEBHOOK_SECRET` in the root `.env`.
+> - If several projects live under the same Linear team, they can all share one team-level webhook pointing to `/linear-webhook`.
+> - If projects live under different Linear teams, create one Linear webhook per team, all pointing to the same `/linear-webhook` URL.
+> - You can seed a new entry with the exact `linearProjectName`, and `./scripts/add-project.sh` will resolve and persist the real `linearProjectId` back into `projects.local.json`.
+> - `linearProjectId` is the hard binding between one Linear project and one GitHub repo, which prevents a shared board from dispatching the wrong ticket into the wrong repo.
 
 ## Target Project Requirements
 
@@ -143,19 +156,11 @@ For solto to open PRs against a GitHub repo, the repo must meet these conditions
 1. **GitHub-hosted**. solto clones via `gh repo clone <owner>/<repo>` and opens PRs via `gh pr create`.
 2. **`agent` user has push + PR-create permission**. Configure this once via `gh auth login`. For org-owned repos, make sure the auth token has the right scopes and the user is a collaborator with at least Write access. One running `solto` instance assumes this single GitHub identity for all managed repos on that host.
 3. **A default branch exists**. `main` by default. If yours is different, set `githubBase` for that entry in `projects.local.json`.
-4. **`AGENTS.md` at each managed repo root**. Both Claude Code and Codex read this natively. solto's agent prompt explicitly instructs the agent to read it first and follow every rule. This means the repo cloned under `repos/<id>/`, not the `solto` repo itself. Without one, the agent will guess at your conventions.
+4. **`AGENTS.md` at each managed repo root**. Both Claude Code and Codex read this natively. solto's agent prompt explicitly instructs the agent to read it first and follow every rule. This means the repo cloned under `repos/<id>/`, not the `solto` repo itself.
 
-### What to Put in `AGENTS.md`
+### Attachment Context
 
-Minimum contents for the agent to do good work:
-
-- **Commit Conventions**.
-- **PR Conventions**.
-- **Code Style**.
-- **Test Policy**.
-- **Dependency Policy**.
-- **Build/Dev Setup**.
-- **Files/Directories the Agent Should Never Touch**.
+solto does its best to read useful context from Linear attachments. Text-like attachments, embedded text and SVGs are passed through directly. Images are summarized when `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is configured and the provider can read them. Other binaries are best-effort only and may be ignored if solto cannot extract anything useful from them.
 
 ## 4. Authenticate the Coder
 
@@ -184,9 +189,9 @@ curl https://<your-host>.<your-domain>/health
 
 What the script does:
 
-- Runs `cloudflared tunnel login` If This Host Is Not Authenticated Yet.
-- Creates `solto-tunnel` If It Does Not Exist Yet.
-- Routes the Hostname to That Tunnel.
+- Runs `cloudflared tunnel login` if this host is not authenticated yet.
+- Creates `solto-tunnel` if it does not exist yet.
+- Routes the hostname to that tunnel.
 - Writes `~/.cloudflared/config.yml` for `localhost:3000`.
 
 Once that is in place, `pm2 start ecosystem.config.cjs` brings up both `solto` and `cloudflare-tunnel`.
