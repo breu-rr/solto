@@ -143,7 +143,7 @@ For solto to open PRs against a GitHub repo, the repo must meet these conditions
 1. **GitHub-hosted**. solto clones via `gh repo clone <owner>/<repo>` and opens PRs via `gh pr create`.
 2. **`agent` user has push + PR-create permission**. Configure this once via `gh auth login`. For org-owned repos, make sure the auth token has the right scopes and the user is a collaborator with at least Write access. One running `solto` instance assumes this single GitHub identity for all managed repos on that host.
 3. **A default branch exists**. `main` by default. If yours is different, set `githubBase` for that entry in `projects.local.json`.
-4. **`AGENTS.md` at the repo root**. Both Claude Code and Codex read this natively. solto's agent prompt explicitly instructs the agent to read it first and follow every rule. Without one, the agent will guess at your conventions.
+4. **`AGENTS.md` at each managed repo root**. Both Claude Code and Codex read this natively. solto's agent prompt explicitly instructs the agent to read it first and follow every rule. This means the repo cloned under `repos/<id>/`, not the `solto` repo itself. Without one, the agent will guess at your conventions.
 
 ### What to Put in `AGENTS.md`
 

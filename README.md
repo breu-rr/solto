@@ -105,7 +105,7 @@ For follow-up changes on an existing PR, comment with the bot mention, usually `
 - Public HTTPS to `localhost:3000` for Linear Webhooks. The Default Setup Uses [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/), but Any HTTPS Ingress Works.
 - A [Linear](https://linear.app/) Workspace and a [GitHub](https://github.com/) Account That Can Push Branches and Open PRs on Your Target Repos.
 
-Your target repo should live on GitHub, have a default branch and include a root `AGENTS.md` with code style, test commands, dependency policy and any “don’t touch this” rules. If the repo needs env vars or special setup, document that in `AGENTS.md` or provide an `.env.example`.
+Each managed target repo should live on GitHub, have a default branch and include its own root `AGENTS.md` with code style, test commands, dependency policy and any “don’t touch this” rules. This is about the repo under `repos/<id>/`, not the `solto` repo itself. If a target repo needs env vars or special setup, document that in its `AGENTS.md` or provide an `.env.example`.
 
 ## Running Multiple Projects
 
